@@ -103,8 +103,10 @@ def search_lines(src): # Count lines in image
 
 def analysis_pictures(img):
 
-    #gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blur  = cv2.blur(img, (7, 7))
+    param = {}
+
+    gray  = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2GRAY)
+    blur  = cv2.blur(gray, (7, 7))
     gb    = cv2.GaussianBlur(blur, (7, 7), 0)
     edges = cv2.Canny(gb, 50, 150)
     edges = cv2.Canny(gb, 100, 200)
@@ -112,15 +114,18 @@ def analysis_pictures(img):
 
     lines, averadge = search_lines(edges)
 
-    for rho, theta in lines[0]:
-        a = np.cos(theta)
-        b = np.sin(theta)
-        x0 = a*rho
-        y0 = b*rho
-        x1 = int(x0 + 1000 * (-b))
-        y1 = int(y0 + 1000 * (a))
-        x2 = int(x0 - 1000 * (-b))
-        y2 = int(y0 - 1000 * (a))
+    param['lines']    = lines
+    param['averadge'] = averadge
+
+    # for rho, theta in lines[0]:
+    #     a = np.cos(theta)
+    #     b = np.sin(theta)
+    #     x0 = a*rho
+    #     y0 = b*rho
+    #     x1 = int(x0 + 1000 * (-b))
+    #     y1 = int(y0 + 1000 * (a))
+    #     x2 = int(x0 - 1000 * (-b))
+    #     y2 = int(y0 - 1000 * (a))
 
         #cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
@@ -141,7 +146,7 @@ def analysis_pictures(img):
     storage_ = cv.CreateMemStorage(0)
     contours = cv.FindContours(cv.fromarray(thresh.copy()), storage_, cv.CV_RETR_LIST, cv.CV_CHAIN_APPROX_SIMPLE)
 
-    contours2 = cv2.findContours(thresh.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    #contours2 = cv2.findContours(thresh.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     #cv2.drawContours(thresh, contours2[0], 0, 0, 2)
     #cv.DrawContours(cv.fromarray(thresh), contours, cv.CV_RGB(0,255,255), cv.CV_RGB(0,255,0), 2,2,-1)
@@ -151,7 +156,16 @@ def analysis_pictures(img):
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
-    cnt = contours
+    param['contours'] = contours
+    param['circle'] = circle
+
+    tmp = analis_object_in_img(img)
+
+    param['count'] = tmp['count']
+    param['width'] = tmp['width']
+    param['height'] = tmp['height']
+
+    #cnt = contours
     #rect = cv2.minAreaRect(contours[0])
 
     #hull = convex_hull(cnt)
@@ -160,7 +174,7 @@ def analysis_pictures(img):
     # box = np.int0(box)
     # img = cv2.drawContours(img,[box],0,(0,0,255),2)
 
-    return cnt, circle, lines, averadge, contours2
+    return param
 
 def mapping_img(img):
 
@@ -230,7 +244,43 @@ def analis_object_in_img(img):
     width  = max[0] - min[0]
     height = max[1] - min[1]
 
-    return height, width, count
+    param = {'count' : count, 'width' : width, 'height' : height}
+
+    return param
+
+def bFMatch(temp, varif):
+
+    img1 = mapping_img(temp)   # queryImage
+    img2 = mapping_img(varif)  # trainImage
+
+    # Initiate SIFT detector
+    sift = cv2.SIFT()
+
+    # find the keypoints and descriptors with SIFT
+    kp1, des1 = sift.detectAndCompute(img1,None)
+    kp2, des2 = sift.detectAndCompute(img2,None)
+
+    FLANN_INDEX_KDTREE = 0
+    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 10)
+    search_params = dict(checks = 50)
+
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+    matches = flann.knnMatch(des1, des2, k=2)
+
+    # store all the good matches as per Lowe's ratio test.
+    good = []
+    for m,n in matches:
+        if m.distance < 0.7*n.distance:
+            good.append(m)
+
+    BFMatch = float(len(good)) / len(matches)
+
+    # Show only the top 10 matches
+    drawMatches(img1, kp1, img2, kp2, good)
+
+    return BFMatch
+
 
 ########################################################################################################################
 ########################################################################################################################
@@ -248,95 +298,72 @@ def analis_object_in_img(img):
 ########################################################################################################################
 ########################################################################################################################
 
+# Инциализируем имена изображений
 template_image   = "var2_test3.png"
 verifiable_image = "var2_main3.png"
 
 template_image   = "test3.png"
 verifiable_image = "test4.png"
 
+# Открываем изображение
 image1 = cv2.imread(template_image)
 image2 = cv2.imread(verifiable_image)
 
+image1_bfm = cv2.imread(template_image, 0)
+image2_bfm = cv2.imread(verifiable_image, 0)
 
-MIN_MATCH_COUNT = 10
+# Brute-Force Matching with SIFT Descriptors and Ratio Test
+BFMatch = bFMatch(image1_bfm, image2_bfm)
 
-img1 = mapping_img(cv2.imread(template_image, 0))   # queryImage
-img2 = mapping_img(cv2.imread(verifiable_image, 0))  # trainImage
+# Анализируем изображение
+param_template   = analysis_pictures(image1)
+param_verifiable = analysis_pictures(image2)
 
-# Initiate SIFT detector
-sift = cv2.SIFT()
+# Сравнимаем контуры методом моментов
+matchShapes = cv.MatchShapes(param_template['contours'], param_verifiable['contours'], 2, 0.0)
 
-# find the keypoints and descriptors with SIFT
-kp1, des1 = sift.detectAndCompute(img1,None)
-kp2, des2 = sift.detectAndCompute(img2,None)
+# Определяем длины, ширину и кол-во элементов в подписи
 
-FLANN_INDEX_KDTREE = 0
-index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 10)
-search_params = dict(checks = 50)
+#height2, width2, count2 = analis_object_in_img(image2)
 
-flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-matches = flann.knnMatch(des1, des2, k=2)
-
-# store all the good matches as per Lowe's ratio test.
-good = []
-for m,n in matches:
-    if m.distance < 0.7*n.distance:
-        good.append(m)
-
-if len(good) > MIN_MATCH_COUNT:
-    src_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-    dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
-
-    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-    matchesMask = mask.ravel().tolist()
-
-    h, w = img1.shape
-    pts = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]).reshape(-1, 1, 2)
-    dst = cv2.perspectiveTransform(pts, M)
-
-BFMatch = float(len(good)) / len(matches)
-
-# Show only the top 10 matches
-drawMatches(img1, kp1, img2, kp2, good)
-
-cnt1, circle1, lines1, averadge1, c1 = analysis_pictures(image1)
-cnt2, circle2, lines2, averadge2, c2 = analysis_pictures(image2)
-
-matchShapes = cv.MatchShapes(cnt1, cnt2, 2, 0.0)
-
-height1, width1, count1 = analis_object_in_img(image1)
-height2, width2, count2 = analis_object_in_img(image2)
-
+# Словарь выполнения критериев
 criterion = {}
 
-criterion['count_line'] = "true" if math.fabs(lines1.size / 2 - lines2.size / 2) < 100 else "false"
-criterion['averadge'] =   "true" if math.fabs(averadge1 - averadge2) < 6.0 else "false"
-criterion['height']   =   "true" if math.fabs(height1 - height2) < 10 else "false"
-criterion['width']   =    "true" if math.fabs(width1 - width2) < 30 else "false"
-criterion['count_elem'] = "true" if math.fabs(count1 - count2) < 2 else "false"
-criterion['count_circ'] = "true" if math.fabs(circle1.size / 2 - circle2.size / 2) < 40 else "false"
-criterion['BFMatch']  =   "true" if BFMatch > 0.1 else "false"
+# Определяем выполнение критериев
+criterion['count_line'] = "true" if math.fabs(param_template['lines'].size / 2  - param_verifiable['lines'].size / 2)  < 100 else "false"
+criterion['count_circ'] = "true" if math.fabs(param_template['circle'].size / 2 - param_verifiable['circle'].size / 2) < 40  else "false"
+criterion['averadge'] =   "true" if math.fabs(param_template['averadge'] - param_verifiable['averadge']) < 6.0 else "false"
+criterion['height']   =   "true" if math.fabs(param_template['height']   - param_verifiable['height'])   < 10  else "false"
+criterion['width']   =    "true" if math.fabs(param_template['width']    - param_verifiable['width'])    < 30  else "false"
+criterion['count_elem'] = "true" if math.fabs(param_template['count']    - param_verifiable['count'])    < 2   else "false"
+
+criterion['BFMatch']  =   "true" if BFMatch > 0.1     else "false"
 criterion['MatchShapes']= "true" if matchShapes < 0.1 else "false"
 
-print "_____________________________________________________________________________"
-print u"|\tНазвание критерия\t|\tШаблон\t| Проверяемый | Критерий выполнился?\t|"
-print u"|\tКол-во линий\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (lines1.size / 2, lines2.size / 2, criterion['count_line'])
-print u"|\tКол-во окруж.\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (circle1.size / 2, circle2.size / 2, criterion['count_circ'])
-print u"|\tКол-во элементов\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (count1, count2, criterion['count_elem'])
-print u"|\tУгол наклона\t\t|\t%5.3f\t|\t%5.3f\t  |\t\t\t%s\t\t\t|" % (averadge1, round(averadge2, 3), criterion['averadge'])
-print u"|\tВысота\t\t\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (height1, height2, criterion['height'])
-print u"|\tДлина\t\t\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (width1, width2, criterion['width'])
-print u"|\tBrute-Force Match\t|\t%13f\t\t  |\t\t\t%s\t\t\t|" % (BFMatch, criterion['BFMatch'])
-print u"|\tМетод моментов\t\t|\t%13f\t\t  |\t\t\t%s\t\t\t|" % (matchShapes, criterion['MatchShapes'])
-print "-----------------------------------------------------------------------------"
-
+# Вычисляем кол-во выполненных критериев
 count_true = 0
 for cr in criterion.values():
     if cr == "true":
         count_true = count_true + 1
 
-print u"Проверка успешна пройден. Подписи совпадают." if count_true > 4 else u"Проверка не пройдена. Подписи не совпадают."
+# Вывод результата
+print "+===========================================================================+"
+print u"|\tНазвание критерия\t|\tШаблон\t| Проверяемый | Критерий выполнился?\t|"
+print u"|\tКол-во линий\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['lines'].size / 2, param_verifiable['lines'].size / 2, criterion['count_line'])
+print u"|\tКол-во окруж.\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['circle'].size / 2, param_verifiable['circle'].size / 2, criterion['count_circ'])
+print u"|\tКол-во элементов\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['count'], param_verifiable['count'], criterion['count_elem'])
+print u"|\tУгол наклона\t\t|\t%5.3f\t|\t%5.3f\t  |\t\t\t%s\t\t\t|" % (param_template['averadge'], param_verifiable['averadge'], criterion['averadge'])
+print u"|\tВысота\t\t\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['height'], param_verifiable['height'], criterion['height'])
+print u"|\tДлина\t\t\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['width'], param_verifiable['width'], criterion['width'])
+print "+---------------------------------------------------------------------------+"
+print u"|\tBrute-Force Match\t|\t%13f\t\t  |\t\t\t%s\t\t\t|" % (BFMatch, criterion['BFMatch'])
+print u"|\tМетод моментов\t\t|\t%13f\t\t  |\t\t\t%s\t\t\t|" % (matchShapes, criterion['MatchShapes'])
+print "+===========================================================================+"
+
+print u"| Проверка успешна пройден. Подписи совпадают.\t\t\t\t\t\t\t\t|" if count_true > 4 else \
+      u"| Проверка не пройдена. Подписи не совпадают.\t\t\t\t\t\t\t\t|"
+
+print "+===========================================================================+"
 
 
 #ret = cv2.matchShapes((c1), (c2), 2, 0.0)
