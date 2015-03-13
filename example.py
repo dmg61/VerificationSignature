@@ -1,4 +1,4 @@
-#__author__ = 'bliq'
+#__author__ = 'Astakhov D. A.'
 # -*- coding: utf-8 -*-
 
 import numpy as np
