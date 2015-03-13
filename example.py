@@ -164,6 +164,7 @@ def analysis_pictures(img):
     param['count'] = tmp['count']
     param['width'] = tmp['width']
     param['height'] = tmp['height']
+    param['square'] = tmp['square']
 
     #cnt = contours
     #rect = cv2.minAreaRect(contours[0])
@@ -221,30 +222,33 @@ def analis_object_in_img(img):
 
     #Считаем количество слов
     i = 0
+    square = 0.0
     for element in cnts:
         c = sorted(cnts, key = cv2.contourArea, reverse = True)[i]
         rect = cv2.minAreaRect(c) #определим минимальный ограничивающий прямоугольник (координаты слов)
         if(rect[1][0] > 15 and rect[1][0] > 15): #отсеиваем мильчайшие контуры
-            mass.append(rect) #Добавляем прямоугольник с найденным словом
-
             box = np.int0(cv2.cv.BoxPoints(rect))
+            mass += [box] #Добавляем прямоугольник с найденным словом
             cv2.drawContours(img, [box], -1, (0, 255, 0), 3)
 
-            i = i+1
+            square += math.sqrt(math.pow(box[0][0] - box[1][0], 2) + math.pow(box[0][1] - box[1][1], 2)) * \
+                      math.sqrt(math.pow(box[1][0] - box[2][0], 2) + math.pow(box[1][1] - box[2][1], 2))
 
+            i += 1
+
+    mass = [y for x in mass for y in x]
     tmp = mass[:]
 
-    tmp.sort(key=lambda rows: rows[0][0])  #сортируем массив по оси X
-    mass.sort(key=lambda rows: rows[0][1]) #сортируем массив по оси Y
+    tmp.sort(key=lambda rows: rows[0])  #сортируем массив по оси X
+    mass.sort(key=lambda rows: rows[1]) #сортируем массив по оси Y
 
-    max = (tmp[-1][0][0], mass[-1][0][1])
-    min = (tmp[0][0][0], mass[0][0][1])
+    max = (tmp[-1][0], mass[-1][1])
+    min = (tmp[0][0], mass[0][1])
 
-    count = len(mass)
     width  = max[0] - min[0]
     height = max[1] - min[1]
 
-    param = {'count' : count, 'width' : width, 'height' : height}
+    param = {'count' : i, 'width' : width, 'height' : height, 'square' : square}
 
     return param
 
@@ -333,9 +337,11 @@ criterion = {}
 criterion['count_line'] = "true" if math.fabs(param_template['lines'].size / 2  - param_verifiable['lines'].size / 2)  < 100 else "false"
 criterion['count_circ'] = "true" if math.fabs(param_template['circle'].size / 2 - param_verifiable['circle'].size / 2) < 40  else "false"
 criterion['averadge'] =   "true" if math.fabs(param_template['averadge'] - param_verifiable['averadge']) < 6.0 else "false"
-criterion['height']   =   "true" if math.fabs(param_template['height']   - param_verifiable['height'])   < 10  else "false"
-criterion['width']   =    "true" if math.fabs(param_template['width']    - param_verifiable['width'])    < 30  else "false"
+criterion['height']   =   "true" if math.fabs(param_template['height']   - param_verifiable['height'])   < 100 else "false"
+criterion['width']   =    "true" if math.fabs(param_template['width']    - param_verifiable['width'])    < 100 else "false"
 criterion['count_elem'] = "true" if math.fabs(param_template['count']    - param_verifiable['count'])    < 2   else "false"
+criterion['square']     = "true" if math.fabs(param_template['square']    - param_verifiable['square'])< 40000 else "false"
+criterion['count_elem'] = "true" if param_template['count'] == param_verifiable['count'] else "false"
 
 criterion['BFMatch']  =   "true" if BFMatch > 0.1     else "false"
 criterion['MatchShapes']= "true" if matchShapes < 0.1 else "false"
@@ -344,24 +350,26 @@ criterion['MatchShapes']= "true" if matchShapes < 0.1 else "false"
 count_true = 0
 for cr in criterion.values():
     if cr == "true":
-        count_true = count_true + 1
+        count_true += 1
 
 # Вывод результата
 print "+===========================================================================+"
-print u"|\tНазвание критерия\t|\tШаблон\t| Проверяемый | Критерий выполнился?\t|"
+print u"|\tНазвание критерия\t|\tШаблон\t| Проверяемый |  Критерий выполнился?\t|"
+print "+---------------------------------------------------------------------------+"
 print u"|\tКол-во линий\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['lines'].size / 2, param_verifiable['lines'].size / 2, criterion['count_line'])
 print u"|\tКол-во окруж.\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['circle'].size / 2, param_verifiable['circle'].size / 2, criterion['count_circ'])
 print u"|\tКол-во элементов\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['count'], param_verifiable['count'], criterion['count_elem'])
 print u"|\tУгол наклона\t\t|\t%5.3f\t|\t%5.3f\t  |\t\t\t%s\t\t\t|" % (param_template['averadge'], param_verifiable['averadge'], criterion['averadge'])
 print u"|\tВысота\t\t\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['height'], param_verifiable['height'], criterion['height'])
 print u"|\tДлина\t\t\t\t|\t%5d\t|\t%5d\t  |\t\t\t%s\t\t\t|" % (param_template['width'], param_verifiable['width'], criterion['width'])
+print u"|\tПлощадь\t\t\t\t|\t%5.0f\t|\t%5.0f\t  |\t\t\t%s\t\t\t|" % (param_template['square'], param_verifiable['square'], criterion['square'])
 print "+---------------------------------------------------------------------------+"
 print u"|\tBrute-Force Match\t|\t%13f\t\t  |\t\t\t%s\t\t\t|" % (BFMatch, criterion['BFMatch'])
 print u"|\tМетод моментов\t\t|\t%13f\t\t  |\t\t\t%s\t\t\t|" % (matchShapes, criterion['MatchShapes'])
 print "+===========================================================================+"
 
-print u"| Проверка успешна пройден. Подписи совпадают.\t\t\t\t\t\t\t\t|" if count_true > 4 else \
-      u"| Проверка не пройдена. Подписи не совпадают.\t\t\t\t\t\t\t\t|"
+print u"| Проверка успешна пройден. Подписи совпадают.\t  |\t\t\t%d / 9\t\t\t|" % (count_true) if count_true > 5 else \
+      u"| Проверка не пройдена. Подписи не совпадают.\t  |\t\t\t%d / 9\t\t\t|"  % (count_true)
 
 print "+===========================================================================+"
 
