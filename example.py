@@ -1,4 +1,4 @@
-#__author__ = 'Astakhov D. A.'
+__author__ = 'Astakhov D. A.'
 # -*- coding: utf-8 -*-
 
 import numpy as np
@@ -283,10 +283,10 @@ def bFMatch(temp, varif):
     img1 = mapping_img(temp)   # queryImage
     img2 = mapping_img(varif)  # trainImage
 
-    # Initiate SIFT detector
+    # Инциализируем SIFT detector
     sift = cv2.SIFT()
 
-    # find the keypoints and descriptors with SIFT
+    # Находим ключевие точки и дескрипторы с помощью SIFT
     kp1, des1 = sift.detectAndCompute(img1,None)
     kp2, des2 = sift.detectAndCompute(img2,None)
 
@@ -298,7 +298,7 @@ def bFMatch(temp, varif):
 
     matches = flann.knnMatch(des1, des2, k=2)
 
-    # store all the good matches as per Lowe's ratio test.
+    # Находим все "хорошие" совпадения
     good = []
     for m,n in matches:
         if m.distance < 0.7*n.distance:
@@ -306,7 +306,7 @@ def bFMatch(temp, varif):
 
     BFMatch = float(len(good)) / len(matches)
 
-    # Show only the top 10 matches
+    # Показываем "хорошие" точки
     drawMatches(img1, kp1, img2, kp2, good)
 
     return BFMatch
@@ -329,15 +329,14 @@ def bFMatch(temp, varif):
 ########################################################################################################################
 
 # Инциализируем имена изображений
-template_image   = "var2_test3.png"
-verifiable_image = "var2_main3.png"
+template_image   = "var1_main.png"
+verifiable_image = "var1_test.png"
 
-template_image   = "test3.png"
-verifiable_image = "test4.png"
+template_image   = "var2_main.png"
+verifiable_image = "var2_test.png"
 
-template_image   = "template.jpg"
-#verifiable_image = "varifiable.jpg"
-verifiable_image = "varifiable_not_a.jpg"
+template_image   = "var3_main.png"
+verifiable_image = "var3_test.png"
 
 # Открываем изображение
 image1 = cv2.imread(template_image)
